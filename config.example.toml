@@ -1,0 +1,66 @@
+# HomeBot daemon configuration
+# Copy to ~/.config/homebot/homebot.toml and edit as needed.
+#
+# All regex patterns use double-backslash escaping for TOML strings.
+# Patterns are case-insensitive. Missing/empty keys are fatal errors.
+
+[general]
+locale = "en"
+db_path = "~/.local/share/homebot/homebot.db"
+socket_path = "~/.local/share/homebot/homebotd.sock"
+log_level = "info"
+
+[antiafk]
+min_s = 45
+max_s = 150
+
+[tpa]
+request_ttl_s = 60
+max_accepts_per_min = 6
+player_cooldown_s = 30
+freeze_seconds = 2
+
+# Bare-only race hardening:
+# The accept is issued with the player name (/tpaccept <player>).
+# On bare-only servers the name may be ignored by the server;
+# race safety comes from the freeze/rival/confirm layers.
+# /tpdeny is positional (denies the newest pending) — it only
+# narrows the leftover window; post-accept confirmation is the
+# last line of defense. Set false if your server has no /tpdeny.
+deny_others_on_accept = true
+deny_wait_ms = 15000
+
+# Post-accept watch window (ms). The guard expects a "teleport started"
+# message naming the teleporting player; if it names someone ELSE it
+# fires a 'teleport_mismatch' alarm (base-leak evidence).
+confirm_window_ms = 20000
+
+# Command templates — server-dependent, fully configurable.
+# {player} is replaced at send time.
+accept_cmd = "/tpaccept {player}"
+deny_cmd = "/tpdeny"
+request_cmd = "/tpa {player}"
+
+[tpaguard]
+allow_tpahere_from = []
+
+# Auth profile — all regex patterns are defined here, never in code.
+# Add patterns for your server's language(s); combine multiple
+# languages in one profile.
+[auth_profiles.default]
+register_prompt = ["please,?\\s*register", "/register"]
+login_prompt = ["please,?\\s*(log\\s*in)", "/login"]
+wrong_password = ["wrong\\s*password"]
+already_logged = ["already\\s*logged\\s*in", "successful\\s*log\\s*in"]
+already_registered = ["already registered|already been registered|this username is already"]
+register_cmd = "/register {p} {p}"
+login_cmd = "/login {p}"
+tpa_request = ["([A-Za-z0-9_]{3,16}).*requested.*teleport.*to.*you", "([A-Za-z0-9_]{3,16}).*wants.*to.*teleport.*to.*you"]
+tpahere_request = ["([A-Za-z0-9_]{3,16}).*requested.*that.*you.*teleport.*to.*them", "([A-Za-z0-9_]{3,16}).*wants.*you.*to.*teleport.*to.*them"]
+respawn_set = ["respawn\\s*point\\s*set"]
+tpa_confirm = ["([A-Za-z0-9_]{3,16}).*teleport.*(started|successful)"]
+tpa_deny = ["request.*denied|tpa.*cancelled|cancelled"]
+tpa_expired = ["request.*expired|timed\\s*out"]
+tp_success = ["teleport"]
+bed_missing = ["bed.*obstruct|bed.*missing|this bed is no longer|your bed is (missing|gone|destroyed)"]
+kick_banned = ["banned"]

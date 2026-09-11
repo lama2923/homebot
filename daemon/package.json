@@ -1,0 +1,14 @@
+{
+  "name": "homebot-daemon",
+  "version": "0.2.0",
+  "description": "HomeBot daemon — persistent Minecraft home bots for anarchy servers",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js --config homebot.toml",
+    "dev": "node src/main.js --config homebot.test.toml"
+  },
+  "dependencies": {
+    "mineflayer": "^4.0.0"
+  }
+}

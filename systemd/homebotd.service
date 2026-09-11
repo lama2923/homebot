@@ -1,0 +1,14 @@
+[Unit]
+Description=HomeBot daemon — persistent Minecraft home bots
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node %h/.local/share/homebot/daemon/src/main.js --config %h/.config/homebot/homebot.toml
+WorkingDirectory=%h/.local/share/homebot
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

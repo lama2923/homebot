@@ -1,0 +1,18 @@
+{
+  "name": "homebotv1",
+  "version": "1.0.0",
+  "description": "Minecraft anarchy sunucuları için kalıcı \"canlı home\" botları (MC 1.21.1, offline-mode). Her bot bir respawn noktasını (yatak) sabitler ve allowlist'teki oyuncuların `/tpa` isteğini kabul eder; böylece nerede olursan ol eve dönebilirsin.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "mineflayer": "^4.39.0"
+  }
+}

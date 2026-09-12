@@ -135,19 +135,67 @@ export class BotRunner extends EventEmitter {
     if (!text) return;
 
     const clean = text.replace(/§[0-9a-fk-or]/gi, '');
+    // mineflayer fires 'chat' for player lines too — 'message' handles
+    // system lines only here so the same line is never emitted twice.
     const isSystem = position !== 'chat';
+    if (!isSystem) return;
 
-    this.emit('chat', { system: isSystem, sender: null, content: clean });
+    this.emit('chat', { system: true, sender: null, content: clean });
 
     this.handleAuth(clean);
 
-    if (isSystem) {
+    try {
+      const res = this.tpaGuard.handle(clean, this.config.name, { chat: (t) => this.safeChat(t) }, this.tpaLogCb);
+      this.onTpaGuardResult(res);
+    } catch (err) {
+      this.emit('log', 'error', `tpa parse error: ${err.message}`);
+    }
+  }
+
+  // Auth-gate channel unlock: join → 2 moves + jump so /msg works.
+  async unlockChatChannel() {
+    if (!this.bot || !this.alive) return;
+    try {
+      this.bot.setControlState('forward', true);
+      await new Promise(r => setTimeout(r, 350));
+      this.bot.setControlState('forward', false);
+      this.bot.setControlState('jump', true);
+      await new Promise(r => setTimeout(r, 350));
+      this.bot.setControlState('jump', false);
+      this.emit('log', 'info', 'chat channel warmup done (moved+jumped for /msg unlock)');
+    } catch (err) {
+      this.emit('log', 'warn', `chat warmup failed: ${err.message}`);
+    }
+  }
+
+  startAntiAfk() {
+    if (this.antiafkTimer || this.shuttingDown) return;
+    const minS = this.opts.antiafkMinS || 45;
+    const maxS = this.opts.antiafkMaxS || minS + 105;
+    this.antiafkTimer = setInterval(() => {
+      if (this.shuttingDown || !this.bot || !this.alive) return;
       try {
-        const res = this.tpaGuard.handle(clean, this.config.name, { chat: (t) => this.safeChat(t) }, this.tpaLogCb);
-        this.onTpaGuardResult(res);
+        const moves = ['forward', 'back', 'left', 'right'];
+        const mv = moves[Math.floor(Math.random() * moves.length)];
+        this.bot.setControlState(mv, true);
+        setTimeout(() => {
+          if (!this.bot) return;
+          this.bot.setControlState(mv, false);
+          try {
+            this.bot.look(Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.6);
+          } catch {}
+        }, 400 + Math.random() * 400);
+        this.emit('log', 'info', `anti-afk: move ${mv} + look`);
       } catch (err) {
-        this.emit('log', 'error', `tpa parse error: ${err.message}`);
+        this.emit('log', 'warn', `anti-afk failed: ${err.message}`);
       }
+    }, minS * 1000 + Math.random() * (maxS - minS) * 1000);
+  }
+
+  stopAntiAfk() {
+    if (this.antiafkTimer) {
+      clearInterval(this.antiafkTimer);
+      this.antiafkTimer = null;
     }
   }
 
@@ -179,6 +227,8 @@ export class BotRunner extends EventEmitter {
     // Already logged in / successful login
     if (p.alreadyLogged.some(r => r.test(text))) {
       this.setState('ACTIVE');
+      this.unlockChatChannel();
+      this.startAntiAfk();
       this.emit('authResult', true, 'already logged in');
       return;
     }
@@ -278,6 +328,7 @@ export class BotRunner extends EventEmitter {
 
   onEnd() {
     this.alive = false;
+    this.stopAntiAfk();
     const dead = this.bot;
     this.bot = null;
     if (dead) {
@@ -329,6 +380,8 @@ export class BotRunner extends EventEmitter {
       if (this.shuttingDown || epoch !== this.authEpoch) return;
       if (this.state === 'AUTHENTICATING' || this.state === 'CONNECTING') {
         this.setState('ACTIVE');
+        this.unlockChatChannel();
+        this.startAntiAfk();
         this.emit('authResult', true, 'login sent');
       }
     }, 2500);
@@ -338,6 +391,7 @@ export class BotRunner extends EventEmitter {
     this.emit('log', 'info', 'respawned');
     if (this.state === 'AUTHENTICATING' || this.state === 'CONNECTING') return;
     this.setState('ACTIVE');
+    this.startAntiAfk();
   }
 
   clickBed() {
@@ -464,8 +518,9 @@ export class BotRunner extends EventEmitter {
 
   stop() {
     this.shuttingDown = true;
+    this.stopAntiAfk();
     if (this.bot) {
-      this.bot.quit();
+      try { this.bot.quit(); } catch {}
       this.bot = null;
     }
     this.setState('DISABLED');

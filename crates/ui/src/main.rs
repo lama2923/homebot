@@ -779,23 +779,30 @@ impl HomeBotUi {
             Message::EventReceived(ev) => {
                 self.events.push(ev.clone());
                 if self.events.len() > 100 { self.events.remove(0); }
-                // Parse JSON and extract readable chat content
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&ev) {
                     if let Some(result) = v.get("result") {
-                        if let Some(content) = result.get("content").and_then(|c| c.as_str()) {
+                        let event_bot = result.get("bot").and_then(|b| b.as_str()).unwrap_or("");
+                        // Only render events of the bot currently selected in
+                        // the detail view; a global feed would duplicate the
+                        // same server line once per bot.
+                        if self.selected_bot.is_empty() || event_bot == self.selected_bot {
+                            let content = result.get("content").and_then(|c| c.as_str()).unwrap_or("");
                             let sender = result.get("sender").and_then(|s| s.as_str()).unwrap_or("");
-                            let bot = result.get("bot").and_then(|b| b.as_str()).unwrap_or("");
                             let level = result.get("level").and_then(|l| l.as_str()).unwrap_or("info");
                             let msg = result.get("message").and_then(|m| m.as_str());
+                            let kind = result.get("type").and_then(|t| t.as_str()).unwrap_or("");
                             if let Some(msg) = msg {
-                                // It's a log event
-                                self.chat_log.push(format!("[{}] {} {}", level, bot, msg));
+                                // Log events carry runtime noise (anti-afk,
+                                // auth retries, warmups) — keep them out of
+                                // the chat transcript.
+                                if level != "cmd" && kind != "Log" {
+                                    self.chat_log.push(format!("[{}] {}", event_bot, msg));
+                                }
                             } else if !content.is_empty() {
-                                // It's a chat event
                                 if sender.is_empty() {
-                                    self.chat_log.push(format!("[{}] {}", bot, content));
+                                    self.chat_log.push(format!("[{}] {}", event_bot, content));
                                 } else {
-                                    self.chat_log.push(format!("[{}] <{}> {}", bot, sender, content));
+                                    self.chat_log.push(format!("[{}] <{}> {}", event_bot, sender, content));
                                 }
                             }
                             if self.chat_log.len() > 50 { self.chat_log.remove(0); }

@@ -150,7 +150,7 @@ async function main() {
       antiafkMaxS: config.antiafk.maxS,
       tpaRejectNonAllowlisted: config.tpa.rejectNonAllowlisted !== undefined ? !!config.tpa.rejectNonAllowlisted : false,
       tpaMsgCmd: config.tpa.msgCmd !== undefined ? config.tpa.msgCmd : '/msg {player} {message}',
-      tpaNotAllowedMessage: config.tpa.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).",
+      tpaNotAllowedMessage: config.tpa.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: lama2923/homebot (AGPLv3).",
     });
   }
 
@@ -203,7 +203,7 @@ async function main() {
           antiafkMaxS: config.antiafk.maxS,
           tpaRejectNonAllowlisted: config.tpa.rejectNonAllowlisted !== undefined ? !!config.tpa.rejectNonAllowlisted : false,
           tpaMsgCmd: config.tpa.msgCmd !== undefined ? config.tpa.msgCmd : '/msg {player} {message}',
-          tpaNotAllowedMessage: config.tpa.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).",
+          tpaNotAllowedMessage: config.tpa.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: lama2923/homebot (AGPLv3).",
         });
         if (!result.ok) throw new Error(result.error);
         return { id: name };

@@ -41,7 +41,7 @@ export class BotRunner extends EventEmitter {
       denyCmd: opts.tpaDenyCmd || '/tpdeny',
       rejectNonAllowlisted: opts.tpaRejectNonAllowlisted !== undefined ? !!opts.tpaRejectNonAllowlisted : false,
       msgCmd: opts.tpaMsgCmd !== undefined ? opts.tpaMsgCmd : '/msg {player} {message}',
-      notAllowedMessage: opts.tpaNotAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).",
+      notAllowedMessage: opts.tpaNotAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: lama2923/homebot (AGPLv3).",
       allowTpahereFrom: opts.allowTpahereFrom || [],
       tpaRequest: authProfile.tpaRequest,
       tpahereRequest: authProfile.tpahereRequest,

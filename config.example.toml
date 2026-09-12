@@ -46,7 +46,7 @@ reject_non_allowlisted = true
 # Direct-message template used for the reject above.
 # {player} and {message} are substituted at send time.
 msg_cmd = "/msg {player} {message}"
-not_allowed_message = "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3)."
+not_allowed_message = "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: lama2923/homebot (AGPLv3)."
 
 # Bare-only race hardening:
 # /tpdeny is positional (denies the newest pending) - it only narrows the

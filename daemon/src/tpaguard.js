@@ -18,7 +18,7 @@ export class TpaGuard {
     this.denyCmd = opts.denyCmd || '/tpdeny';
     this.rejectNonAllowlisted = opts.rejectNonAllowlisted !== undefined ? !!opts.rejectNonAllowlisted : false;
     this.msgCmd = opts.msgCmd || '/msg {player} {message}';
-    this.notAllowedMessage = opts.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).";
+    this.notAllowedMessage = opts.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: lama2923/homebot (AGPLv3).";
     this.tpaRequestRegex = opts.tpaRequest || [];
     this.tpahereRequestRegex = opts.tpahereRequest || [];
     this.tpaConfirmRegex = opts.tpaConfirm || [];

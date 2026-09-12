@@ -4,6 +4,7 @@
   "description": "HomeBot daemon — persistent Minecraft home bots for anarchy servers",
   "main": "src/main.js",
   "type": "module",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "node src/main.js --config homebot.toml",
     "dev": "node src/main.js --config homebot.test.toml"

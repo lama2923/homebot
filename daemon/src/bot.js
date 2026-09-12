@@ -39,6 +39,9 @@ export class BotRunner extends EventEmitter {
       denyWaitMs: opts.tpaDenyWaitMs !== undefined ? opts.tpaDenyWaitMs : 15000,
       acceptCmd: opts.tpaAcceptCmd || '/tpaccept {player}',
       denyCmd: opts.tpaDenyCmd || '/tpdeny',
+      rejectNonAllowlisted: opts.tpaRejectNonAllowlisted !== undefined ? !!opts.tpaRejectNonAllowlisted : false,
+      msgCmd: opts.tpaMsgCmd !== undefined ? opts.tpaMsgCmd : '/msg {player} {message}',
+      notAllowedMessage: opts.tpaNotAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).",
       allowTpahereFrom: opts.allowTpahereFrom || [],
       tpaRequest: authProfile.tpaRequest,
       tpahereRequest: authProfile.tpahereRequest,
@@ -94,7 +97,6 @@ export class BotRunner extends EventEmitter {
       hideErrors: true,
     });
 
-    // Password shape diagnostics (never the secret itself).
     const pw = this.config.password || '';
     this.emit('log', 'info', `password check: length=${pw.length}, ascii=${/^[\x20-\x7e]+$/.test(pw)}, spaces=${/\s/.test(pw)}`);
 
@@ -334,7 +336,6 @@ export class BotRunner extends EventEmitter {
 
   onRespawn() {
     this.emit('log', 'info', 'respawned');
-    // 1.21 join also fires a respawn packet; do not skip AuthMe by going ACTIVE early.
     if (this.state === 'AUTHENTICATING' || this.state === 'CONNECTING') return;
     this.setState('ACTIVE');
   }
@@ -419,13 +420,7 @@ export class BotRunner extends EventEmitter {
     if (this.safeChat(cmd)) this.emit('tpaLog', 'tpa', player, 'sent');
   }
 
-  /**
-   * S6e — self-sabotage: cancel an in-flight teleport by moving.
-   * The server cancels a TPA teleport when the target moves during the
-   * teleport interval. On any contamination sign (late rival / mismatch)
-   * the bot deliberately walks + jumps so a racing attacker can never
-   * arrive at the base.
-   */
+
   sabotageTeleport(reason) {
     if (!this.bot || !this.alive) return;
     this.emit('log', 'error', `teleport sabotage (${reason}): moving to cancel in-flight teleport`);
@@ -445,10 +440,7 @@ export class BotRunner extends EventEmitter {
     }
   }
 
-  /**
-   * Compromise escalation: a teleport_mismatch means the base may be
-   * exposed. Disable the bot immediately so nothing further is accepted.
-   */
+
   disableForCompromise(reason) {
     this.emit('log', 'error', `compromise response (${reason}): DISABLING bot`);
     this.shuttingDown = true;
@@ -460,7 +452,6 @@ export class BotRunner extends EventEmitter {
     this.setState('DISABLED');
   }
 
-  /** React to a guard verdict: sabotage on any contamination flag. */
   onTpaGuardResult(result) {
     if (!result) return;
     if (result.action === 'teleport_mismatch') {
@@ -482,7 +473,7 @@ export class BotRunner extends EventEmitter {
 
   scheduleReconnect() {
     if (this.shuttingDown) return;
-    // Honor an active server-side rate-limit window first.
+
     if (this.rateLimitUntil && Date.now() < this.rateLimitUntil) {
       const wait = this.rateLimitUntil - Date.now();
       this.emit('log', 'info', `rate-limited; waiting ${Math.ceil(wait / 1000)}s before reconnect`);
@@ -492,8 +483,7 @@ export class BotRunner extends EventEmitter {
       }, wait);
       return;
     }
-    // Temporary kicks ("already connected", "too fast") ask for a short
-    // fixed wait — 3s instead of climbing the ladder.
+
     let delay;
     if (this.tempKick) {
       this.tempKick = false;

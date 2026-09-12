@@ -26,7 +26,7 @@ function loadConfig(path) {
       logLevel: 'info',
     },
     antiafk: { minS: 45, maxS: 150 },
-    tpa: { requestTtlS: 60, maxAcceptsPerMin: 6, playerCooldownS: 30, freezeSeconds: 2, denyOthersOnAccept: true, confirmWindowMs: 20000, denyWaitMs: 15000, acceptCmd: '/tpaccept {player}', denyCmd: '/tpdeny', requestCmd: '/tpa {player}' },
+    tpa: { requestTtlS: 60, maxAcceptsPerMin: 6, playerCooldownS: 30, freezeSeconds: 2, denyOthersOnAccept: true, confirmWindowMs: 20000, denyWaitMs: 15000, acceptCmd: '/tpaccept {player}', denyCmd: '/tpdeny', requestCmd: '/tpa {player}', msgCmd: '/msg {player} {message}', rejectNonAllowlisted: false, notAllowedMessage: "You are not on this bot's allowlist; your TPA request was rejected." },
     tpaguard: { allowTpahereFrom: [] },
     authProfiles: {},
   };
@@ -146,6 +146,9 @@ async function main() {
       tpaAcceptCmd: config.tpa.acceptCmd || '/tpaccept {player}',
       tpaDenyCmd: config.tpa.denyCmd || '/tpdeny',
       tpaRequestCmd: config.tpa.requestCmd || '/tpa {player}',
+      tpaRejectNonAllowlisted: config.tpa.rejectNonAllowlisted !== undefined ? !!config.tpa.rejectNonAllowlisted : false,
+      tpaMsgCmd: config.tpa.msgCmd !== undefined ? config.tpa.msgCmd : '/msg {player} {message}',
+      tpaNotAllowedMessage: config.tpa.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).",
     });
   }
 
@@ -194,6 +197,9 @@ async function main() {
           tpaAcceptCmd: config.tpa.acceptCmd || '/tpaccept {player}',
           tpaDenyCmd: config.tpa.denyCmd || '/tpdeny',
           tpaRequestCmd: config.tpa.requestCmd || '/tpa {player}',
+          tpaRejectNonAllowlisted: config.tpa.rejectNonAllowlisted !== undefined ? !!config.tpa.rejectNonAllowlisted : false,
+          tpaMsgCmd: config.tpa.msgCmd !== undefined ? config.tpa.msgCmd : '/msg {player} {message}',
+          tpaNotAllowedMessage: config.tpa.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).",
         });
         if (!result.ok) throw new Error(result.error);
         return { id: name };

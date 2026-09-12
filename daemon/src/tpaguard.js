@@ -16,6 +16,9 @@ export class TpaGuard {
     this.freezeSeconds = opts.freezeSeconds !== undefined ? opts.freezeSeconds : 2;
     this.acceptCmd = opts.acceptCmd || '/tpaccept {player}';
     this.denyCmd = opts.denyCmd || '/tpdeny';
+    this.rejectNonAllowlisted = opts.rejectNonAllowlisted !== undefined ? !!opts.rejectNonAllowlisted : false;
+    this.msgCmd = opts.msgCmd || '/msg {player} {message}';
+    this.notAllowedMessage = opts.notAllowedMessage || "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3).";
     this.tpaRequestRegex = opts.tpaRequest || [];
     this.tpahereRequestRegex = opts.tpahereRequest || [];
     this.tpaConfirmRegex = opts.tpaConfirm || [];
@@ -70,6 +73,15 @@ export class TpaGuard {
     const isAllowed = [...allowlist.global, ...allowlist.perBot]
       .some(p => p.toLowerCase() === player.toLowerCase());
     if (!isAllowed) {
+
+      if (this.rejectNonAllowlisted && bot) {
+        const line = this.msgCmd
+          .replaceAll('{player}', player)
+          .replaceAll('{message}', this.notAllowedMessage);
+        bot.chat(line);
+        logCallback(kind, player, 'rejected_not_allowlisted');
+        return { action: 'rejected_not_allowlisted', player, kind };
+      }
       logCallback(kind, player, 'ignored_not_allowlisted');
       return { action: 'ignored_not_allowlisted', player, kind };
     }
@@ -217,6 +229,9 @@ export class TpaGuard {
     if (opts.denyWaitMs !== undefined) this.denyWaitMs = opts.denyWaitMs;
     if (opts.acceptCmd) this.acceptCmd = opts.acceptCmd;
     if (opts.denyCmd) this.denyCmd = opts.denyCmd;
+    if (opts.msgCmd) this.msgCmd = opts.msgCmd;
+    if (opts.notAllowedMessage) this.notAllowedMessage = opts.notAllowedMessage;
+    if (opts.rejectNonAllowlisted !== undefined) this.rejectNonAllowlisted = !!opts.rejectNonAllowlisted;
     if (opts.tpaRequest) this.tpaRequestRegex = opts.tpaRequest;
     if (opts.tpahereRequest) this.tpahereRequestRegex = opts.tpahereRequest;
     if (opts.tpaConfirm) this.tpaConfirmRegex = opts.tpaConfirm;

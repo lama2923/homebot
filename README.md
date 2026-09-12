@@ -1,6 +1,8 @@
 # HomeBot
 
-Persistent "living home" bot swarm for Minecraft anarchy servers (1.21.1).
+Persistent "living home" bot swarm for Minecraft anarchy servers (1.21.1, offline-mode).
+
+Repository: [lama2923/homebot](https://github.com/lama2923/homebot)
 
 Each bot anchors a respawn point (bed) and auto-accepts `/tpa` requests from allowlisted players — a reliable way to return home on servers without `/home`.
 
@@ -63,4 +65,6 @@ All regex patterns are defined in TOML. The daemon refuses to start with missing
 
 ## License
 
-GPL-3.0
+GNU Affero General Public License v3 (AGPLv3)
+
+See [LICENSE](LICENSE). Network-based deployment (including the daemon's IPC server) must provide source to users under AGPLv3 

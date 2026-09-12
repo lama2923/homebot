@@ -1,8 +1,21 @@
 # HomeBot daemon configuration
+# Repository: https://github.com/lama2923/homebot
 # Copy to ~/.config/homebot/homebot.toml and edit as needed.
 #
-# All regex patterns use double-backslash escaping for TOML strings.
-# Patterns are case-insensitive. Missing/empty keys are fatal errors.
+# IMPORTANT — AGPLv3 (this project is licensed under the GNU Affero GPL v3):
+#   * You MAY add options and change behavior. The project's license grant
+#     CANNOT be invalidated, removed, or bypassed by editing this file or
+#     by adding a config switch that tries to "turn off" the license.
+#   * If you deploy a modified copy as a network service (including this
+#     daemon's IPC server), AGPLv3 requires you to provide the full modified
+#     source to those users. Do not re-license, watermark, or hide the
+#     origin to dodge this - it is a legal requirement, not a suggestion.
+#   * Do not change this file in a way that is misleading (e.g. labeling a
+#     quiet ignore as "private/secure" when it is not). Be honest about
+#     what each switch does.
+#
+# Regex patterns use double-backslash escaping for TOML strings and are
+# case-insensitive. Missing/empty pattern keys are fatal errors.
 
 [general]
 locale = "en"
@@ -20,23 +33,34 @@ max_accepts_per_min = 6
 player_cooldown_s = 30
 freeze_seconds = 2
 
+# If true, a player who is NOT on the allowlist is actively rejected:
+# the bot sends them a direct message telling them their TPA request was
+# refused. If false, requests are silently ignored instead.
+#
+# Honest-note: "silent ignore" is NOT a privacy or security feature. Both
+# modes record the attempt in the TPA log, and enabling the reject merely
+# makes that fact visible to the requester. Do not ship or describe this
+# switch as something it is not.
+reject_non_allowlisted = true
+
+# Direct-message template used for the reject above.
+# {player} and {message} are substituted at send time.
+msg_cmd = "/msg {player} {message}"
+not_allowed_message = "Your TPA request was rejected: this bot only accepts its operator's allowlist. Project: https://github.com/lama2923/homebot (AGPLv3)."
+
 # Bare-only race hardening:
-# The accept is issued with the player name (/tpaccept <player>).
-# On bare-only servers the name may be ignored by the server;
-# race safety comes from the freeze/rival/confirm layers.
-# /tpdeny is positional (denies the newest pending) — it only
-# narrows the leftover window; post-accept confirmation is the
-# last line of defense. Set false if your server has no /tpdeny.
+# /tpdeny is positional (denies the newest pending) - it only narrows the
+# leftover window; post-accept confirmation is the last line of defense.
+# Set false if your server has no /tpdeny.
 deny_others_on_accept = true
 deny_wait_ms = 15000
 
-# Post-accept watch window (ms). The guard expects a "teleport started"
-# message naming the teleporting player; if it names someone ELSE it
-# fires a 'teleport_mismatch' alarm (base-leak evidence).
+# Post-accept watch window (ms). If a confirm line names a player other
+# than the expected one, a 'teleport_mismatch' alarm fires (base-leak
+# evidence).
 confirm_window_ms = 20000
 
-# Command templates — server-dependent, fully configurable.
-# {player} is replaced at send time.
+# Command templates - server-dependent, fully configurable.
 accept_cmd = "/tpaccept {player}"
 deny_cmd = "/tpdeny"
 request_cmd = "/tpa {player}"
@@ -44,7 +68,7 @@ request_cmd = "/tpa {player}"
 [tpaguard]
 allow_tpahere_from = []
 
-# Auth profile — all regex patterns are defined here, never in code.
+# Auth profile - all regex patterns are defined here, never in code.
 # Add patterns for your server's language(s); combine multiple
 # languages in one profile.
 [auth_profiles.default]

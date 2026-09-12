@@ -1,8 +1,9 @@
 {
   "name": "homebotv1",
   "version": "1.0.0",
-  "description": "Minecraft anarchy sunucuları için kalıcı \"canlı home\" botları (MC 1.21.1, offline-mode). Her bot bir respawn noktasını (yatak) sabitler ve allowlist'teki oyuncuların `/tpa` isteğini kabul eder; böylece nerede olursan ol eve dönebilirsin.",
+  "description": "HomeBot v1",
   "main": "index.js",
+  "license": "AGPL-3.0-or-later",
   "directories": {
     "test": "tests"
   },

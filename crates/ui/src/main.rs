@@ -167,19 +167,50 @@ pub struct I18n {
     strings: HashMap<String, String>,
 }
 
+const EN_TOML: &str = include_str!("../../../locales/en.toml");
+const DE_TOML: &str = include_str!("../../../locales/de.toml");
+const ES_TOML: &str = include_str!("../../../locales/es.toml");
+const FR_TOML: &str = include_str!("../../../locales/fr.toml");
+const RU_TOML: &str = include_str!("../../../locales/ru.toml");
+const TR_TOML: &str = include_str!("../../../locales/tr.toml");
+
+fn parse_locale(content: &str) -> HashMap<String, String> {
+    let mut strings = HashMap::new();
+    if let Ok(toml) = toml::from_str::<toml::Value>(content) {
+        if let toml::Value::Table(table) = toml {
+            for (k, v) in table {
+                if let toml::Value::String(s) = v {
+                    strings.insert(k, s);
+                }
+            }
+        }
+    }
+    strings
+}
+
 impl I18n {
     pub fn load(lang: Lang) -> Self {
+        // EN is always the base: any key missing from a locale file falls
+        // back to English instead of rendering empty.
+        let mut strings = parse_locale(EN_TOML);
+        if lang.code() != "en" {
+            let embedded = match lang.code() {
+                "de" => DE_TOML,
+                "es" => ES_TOML,
+                "fr" => FR_TOML,
+                "ru" => RU_TOML,
+                "tr" => TR_TOML,
+                _ => EN_TOML,
+            };
+            for (k, v) in parse_locale(embedded) {
+                strings.insert(k, v);
+            }
+        }
+        // Optional runtime override: <cwd>/locales/<code>.toml wins if present.
         let path = format!("locales/{}.toml", lang.code());
-        let mut strings = HashMap::new();
         if let Ok(content) = fs::read_to_string(&path) {
-            if let Ok(toml) = toml::from_str::<toml::Value>(&content) {
-                if let toml::Value::Table(table) = toml {
-                    for (k, v) in table {
-                        if let toml::Value::String(s) = v {
-                            strings.insert(k, s);
-                        }
-                    }
-                }
+            for (k, v) in parse_locale(&content) {
+                strings.insert(k, v);
             }
         }
         Self { strings }

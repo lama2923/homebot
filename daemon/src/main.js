@@ -265,7 +265,7 @@ async function main() {
 
       case 'allowlist.list': {
         if (params.bot) {
-          return registry.allowlist.perBot;
+          return registry.allowlist.perBot[params.bot] || [];
         }
         return registry.allowlist.global;
       }

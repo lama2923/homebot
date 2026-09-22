@@ -242,6 +242,10 @@ struct BotInfo {
     spawn_x: f64,
     spawn_y: f64,
     spawn_z: f64,
+    pos_x: f64,
+    pos_y: f64,
+    pos_z: f64,
+    has_pos: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -297,8 +301,8 @@ enum Message {
     CfgAntiafkChanged(&'static str, String),
     CfgTpaChanged(&'static str, String),
     CfgTpaguardChanged(String),
-    // events
-    EventReceived(String),
+    // events (batched: one message per burst, not one per line)
+    EventsReceived(Vec<String>),
 }
 
 /// Editable view of homebot.toml. Read with `toml`, written back
@@ -475,7 +479,7 @@ struct HomeBotUi {
     cfg: ConfigState,
     // events
     events: Vec<String>,
-    chat_log: Vec<String>,
+    chat_log: Vec<(String, String)>,
 }
 
 impl Default for HomeBotUi {
@@ -775,43 +779,48 @@ impl HomeBotUi {
             }
             Message::CfgTpaguardChanged(v) => self.cfg.allow_tpahere_from = v,
 
-            // events
-            Message::EventReceived(ev) => {
-                self.events.push(ev.clone());
-                if self.events.len() > 100 { self.events.remove(0); }
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&ev) {
-                    if let Some(result) = v.get("result") {
-                        let event_bot = result.get("bot").and_then(|b| b.as_str()).unwrap_or("");
-                        // Only render events of the bot currently selected in
-                        // the detail view; a global feed would duplicate the
-                        // same server line once per bot.
-                        if self.selected_bot.is_empty() || event_bot == self.selected_bot {
-                            let content = result.get("content").and_then(|c| c.as_str()).unwrap_or("");
-                            let sender = result.get("sender").and_then(|s| s.as_str()).unwrap_or("");
-                            let level = result.get("level").and_then(|l| l.as_str()).unwrap_or("info");
-                            let msg = result.get("message").and_then(|m| m.as_str());
-                            let kind = result.get("type").and_then(|t| t.as_str()).unwrap_or("");
-                            if let Some(msg) = msg {
-                                // Log events carry runtime noise (anti-afk,
-                                // auth retries, warmups) — keep them out of
-                                // the chat transcript.
-                                if level != "cmd" && kind != "Log" {
-                                    self.chat_log.push(format!("[{}] {}", event_bot, msg));
-                                }
-                            } else if !content.is_empty() {
-                                if sender.is_empty() {
-                                    self.chat_log.push(format!("[{}] {}", event_bot, content));
-                                } else {
-                                    self.chat_log.push(format!("[{}] <{}> {}", event_bot, sender, content));
-                                }
-                            }
-                            if self.chat_log.len() > 50 { self.chat_log.remove(0); }
-                        }
-                    }
+            // Events are batched per socket burst: one Message → one view
+            // pass. A 200ms quiet window closes the batch (covers AuthMe
+            // prompt floods, TPA bursts, anti-afk ticks).
+            Message::EventsReceived(batch) => {
+                for ev in batch {
+                    self.events.push(ev.clone());
+                    self.parse_event(&ev);
                 }
+                if self.events.len() > 100 { self.events.drain(..self.events.len() - 100); }
             }
         }
         Task::none()
+    }
+
+    fn parse_event(&mut self, ev: &str) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(ev) {
+            if let Some(result) = v.get("result") {
+                let event_bot = result.get("bot").and_then(|b| b.as_str()).unwrap_or("").to_string();
+                // Push every bot's chat into a buffer tagged by bot; the
+                // detail view filters by the selected bot at render time so
+                // the transcript never mixes different bots.
+                let content = result.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                let sender = result.get("sender").and_then(|s| s.as_str()).unwrap_or("");
+                let level = result.get("level").and_then(|l| l.as_str()).unwrap_or("info");
+                let msg = result.get("message").and_then(|m| m.as_str());
+                let kind = result.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                if let Some(msg) = msg {
+                    // Log events carry runtime noise (anti-afk, auth retries,
+                    // warmups) — keep them out of the chat transcript.
+                    if level != "cmd" && kind != "Log" {
+                        self.chat_log.push((event_bot.clone(), msg.to_string()));
+                    }
+                } else if !content.is_empty() {
+                    if sender.is_empty() {
+                        self.chat_log.push((event_bot.clone(), content.to_string()));
+                    } else {
+                        self.chat_log.push((event_bot.clone(), format!("<{}> {}", sender, content)));
+                    }
+                }
+                if self.chat_log.len() > 200 { self.chat_log.drain(..self.chat_log.len() - 200); }
+            }
+        }
     }
 
     // ─── Tasks ─────────────────────────────────────────
@@ -824,6 +833,7 @@ impl HomeBotUi {
                     let arr = v.get("result").and_then(|r| r.as_array()).cloned().unwrap_or_default();
                     let bots: Vec<BotInfo> = arr.into_iter().filter_map(|b| {
                         let spawn = b.get("spawn").cloned().unwrap_or(serde_json::Value::Null);
+                        let pos = b.get("position").cloned().unwrap_or(serde_json::Value::Null);
                         Some(BotInfo {
                             name: b.get("name")?.as_str()?.to_string(),
                             host: b.get("host")?.as_str()?.to_string(),
@@ -833,6 +843,10 @@ impl HomeBotUi {
                             spawn_x: spawn.get("x").and_then(|s| s.as_f64()).unwrap_or(0.0),
                             spawn_y: spawn.get("y").and_then(|s| s.as_f64()).unwrap_or(0.0),
                             spawn_z: spawn.get("z").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                            pos_x: pos.get("x").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                            pos_y: pos.get("y").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                            pos_z: pos.get("z").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                            has_pos: pos.get("x").and_then(|s| s.as_f64()).is_some(),
                         })
                     }).collect();
                     Message::BotListRefreshed(Ok(bots))
@@ -852,7 +866,8 @@ impl HomeBotUi {
                 Ok(v) => {
                     let r = v.get("result").cloned().unwrap_or(serde_json::Value::Null);
                     let spawn = r.get("spawn").cloned().unwrap_or(serde_json::Value::Null);
-                    Message::DetailStatusRefreshed(Ok(BotInfo {
+                    let pos = r.get("position").cloned().unwrap_or(serde_json::Value::Null);
+                    let info = BotInfo {
                         name: r.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string(),
                         host: r.get("host").and_then(|n| n.as_str()).unwrap_or("").to_string(),
                         port: r.get("port").and_then(|n| n.as_u64()).unwrap_or(0) as u16,
@@ -861,7 +876,12 @@ impl HomeBotUi {
                         spawn_x: spawn.get("x").and_then(|s| s.as_f64()).unwrap_or(0.0),
                         spawn_y: spawn.get("y").and_then(|s| s.as_f64()).unwrap_or(0.0),
                         spawn_z: spawn.get("z").and_then(|s| s.as_f64()).unwrap_or(0.0),
-                    }))
+                        pos_x: pos.get("x").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                        pos_y: pos.get("y").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                        pos_z: pos.get("z").and_then(|s| s.as_f64()).unwrap_or(0.0),
+                        has_pos: pos.get("x").and_then(|s| s.as_f64()).is_some(),
+                    };
+                    Message::DetailStatusRefreshed(Ok(info))
                 }
                 Err(e) => Message::DetailStatusRefreshed(Err(e)),
             },
@@ -891,20 +911,28 @@ impl HomeBotUi {
     fn refresh_logs(&self) -> Task<Message> {
         let sock = self.socket_path.clone();
         let method = match self.log_type { LogType::Events => "logs.events", LogType::Tpa => "logs.tpa" };
+        let tpa_mode = self.log_type == LogType::Tpa;
         let bot = if self.logs_bot_filter.is_empty() { None } else { Some(self.logs_bot_filter.clone()) };
         Task::perform(
             async move { rpc_send(&sock, method, serde_json::json!({"bot": bot, "limit": 50u64})).await },
-            |r| match r {
+            move |r| match r {
                 Ok(v) => {
                     let arr = v.get("result").and_then(|r| r.as_array()).cloned().unwrap_or_default();
-                    let logs: Vec<LogEntry> = arr.into_iter().filter_map(|l| {
-                        Some(LogEntry {
-                            id: l.get("id")?.as_i64()?,
-                            bot: l.get("bot").and_then(|b| b.as_str()).map(|s| s.to_string()),
-                            level: l.get("level")?.as_str()?.to_string(),
-                            message: l.get("message")?.as_str()?.to_string(),
-                            ts: l.get("ts")?.as_i64()?,
-                        })
+                    let logs: Vec<LogEntry> = arr.into_iter().filter_map(move |l| {
+                        let id = l.get("id")?.as_i64()?;
+                        let bot = l.get("bot").and_then(|b| b.as_str()).map(|s| s.to_string());
+                        let ts = l.get("ts")?.as_i64()?;
+                        // TPA rows carry req_type/player/action instead of
+                        // level/message — compose a readable line for them.
+                        let (level, message) = if tpa_mode {
+                            let req = l.get("req_type").and_then(|s| s.as_str()).unwrap_or("tpa");
+                            let player = l.get("player").and_then(|s| s.as_str()).unwrap_or("?");
+                            let action = l.get("action").and_then(|s| s.as_str()).unwrap_or("");
+                            (req.to_string(), format!("{} {}", player, action))
+                        } else {
+                            (l.get("level")?.as_str()?.to_string(), l.get("message")?.as_str()?.to_string())
+                        };
+                        Some(LogEntry { id, bot, level, message, ts })
                     }).collect();
                     Message::LogsRefreshed(Ok(logs))
                 }
@@ -1113,6 +1141,9 @@ impl HomeBotUi {
                 row!(text(t("name")), text(&b.name)).spacing(8),
                 row!(text(t("host")), text(format!("{}:{}", b.host, b.port))).spacing(8),
                 row!(text(t("state")), text(&b.state)).spacing(8),
+                row!(text("Position"), text(if b.has_pos {
+                    format!("({:.1},{:.1},{:.1})", b.pos_x, b.pos_y, b.pos_z)
+                } else { t("not_set").into() })).spacing(8),
                 row!(text(t("spawn")), text(if b.spawn_set {
                     format!("({:.1},{:.1},{:.1})", b.spawn_x, b.spawn_y, b.spawn_z)
                 } else { t("not_set").into() })).spacing(8),
@@ -1156,9 +1187,13 @@ impl HomeBotUi {
             ).spacing(6),
         ).spacing(4);
 
-        // Chat log panel
-        let chat_rows: Vec<Element<Message>> = self.chat_log.iter().rev().take(15)
-            .map(|e| text(e).into()).collect();
+        // Chat log panel — only show the currently-selected bot's lines; the
+        // stream mixes all bots, so filter at render time.
+        let chat_rows: Vec<Element<Message>> = self.chat_log.iter().rev()
+            .filter(|(b, _)| b == &self.selected_bot)
+            .take(30)
+            .map(|(_, msg)| text(msg.clone()).into())
+            .collect();
         let chat_panel = if chat_rows.is_empty() {
             column!(text(t("no_chat_events")))
         } else {
@@ -1296,6 +1331,7 @@ impl HomeBotUi {
                 "events",
                 async_stream::stream! {
                     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+                    use tokio::time::{sleep, Duration};
                     match tokio::net::UnixStream::connect(&sock).await {
                         Ok(stream) => {
                             let (rx, mut tx) = stream.into_split();
@@ -1306,17 +1342,36 @@ impl HomeBotUi {
                             let _ = tx.flush().await;
                             let mut reader = BufReader::new(rx);
                             let mut line = String::new();
+                            // Batch socket lines into one Message per burst:
+                            // lines arriving within 200ms join the same batch.
+                            // Anti-AFK ticks, AuthMe floods and TPA bursts
+                            // used to re-render the view once per line.
+                            let mut batch: Vec<String> = Vec::new();
                             loop {
                                 line.clear();
-                                match reader.read_line(&mut line).await {
-                                    Ok(0) => break,
-                                    Ok(_) => {
-                                        if !line.trim().is_empty() {
-                                            yield Message::EventReceived(line.trim().to_string());
+                                let deadline = sleep(Duration::from_millis(200));
+                                tokio::pin!(deadline);
+                                tokio::select! {
+                                    res = reader.read_line(&mut line) => {
+                                        match res {
+                                            Ok(0) => break,
+                                            Ok(_) => {
+                                                if !line.trim().is_empty() {
+                                                    batch.push(line.trim().to_string());
+                                                }
+                                            }
+                                            Err(_) => break,
                                         }
                                     }
-                                    Err(_) => break,
+                                    _ = &mut deadline => {
+                                        if !batch.is_empty() {
+                                            yield Message::EventsReceived(std::mem::take(&mut batch));
+                                        }
+                                    }
                                 }
+                            }
+                            if !batch.is_empty() {
+                                yield Message::EventsReceived(batch);
                             }
                         }
                         Err(_) => {}

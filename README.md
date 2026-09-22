@@ -1,6 +1,6 @@
 # HomeBot
 
-Persistent "living home" bot swarm for Minecraft anarchy servers (1.21.1, offline-mode).
+Persistent "living home" bot swarm for Minecraft anarchy servers (1.21.1).
 
 Repository: [lama2923/homebot](https://github.com/lama2923/homebot)
 

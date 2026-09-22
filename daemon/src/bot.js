@@ -48,7 +48,13 @@ export class BotRunner extends EventEmitter {
       tpaConfirm: authProfile.tpaConfirm || [],
       tpaDeny: authProfile.tpaDeny || [],
       tpaExpired: authProfile.tpaExpired || [],
-    }, () => opts.allowlist || { global: [], perBot: [] });
+    }, () => {
+      const al = opts.allowlist || { global: [], perBot: {} };
+      return {
+        global: al.global || [],
+        perBot: (al.perBot && al.perBot[this.config.name]) || [],
+      };
+    });
 
     this.tpaLogCb = (kind, player, action) => {
       this.emit('tpaLog', kind, player, action);
@@ -102,7 +108,13 @@ export class BotRunner extends EventEmitter {
 
     this.bot.once('spawn', () => this.onSpawn());
     this.bot.on('chat', (username, message) => this.onChat(username, message));
-    this.bot.on('message', (msg, position) => this.onMessage(msg, position));
+    // Player chat is handled by the 'chat' listener above; mineflayer also
+    // fires 'message' for the same line — skip it here to avoid duplicate
+    // chat events in the UI.
+    this.bot.on('message', (msg, position) => {
+      if (position === 'chat') return;
+      this.onMessage(msg, position);
+    });
     this.bot.on('kicked', (reason) => this.onKicked(reason));
     this.bot.on('end', () => this.onEnd());
     this.bot.on('death', () => this.onDeath());
@@ -258,7 +270,11 @@ export class BotRunner extends EventEmitter {
       if (this.bot?.entity?.position) {
         this.spawnPos = this.bot.entity.position.clone();
         this.emit('log', 'info', `respawn point set at (${this.spawnPos.x.toFixed(1)}, ${this.spawnPos.y.toFixed(1)}, ${this.spawnPos.z.toFixed(1)})`);
-        this.emit('spawnChanged', { set: true, x: this.spawnPos.x, y: this.spawnPos.y, z: this.spawnPos.z });
+        this.emit('spawnChanged', {
+          set: true,
+          x: this.spawnPos.x, y: this.spawnPos.y, z: this.spawnPos.z,
+          bed: this.bedPos ? { x: this.bedPos.x, y: this.bedPos.y, z: this.bedPos.z } : null,
+        });
       }
       if (this.bot && this.bot.isSleeping) {
         this.bot.wake();
@@ -428,10 +444,25 @@ export class BotRunner extends EventEmitter {
 
     this.bedPos = found[0];
 
+    // Left-click a bed sets the respawn point, but many servers confirm via
+    // a title/sound rather than a chat message, so 'respawn_set' may never
+    // match. Apply the spawn optimistically from the bot's standing position
+    // on a successful click; the respawn_set handler can still refine it.
+    const setSpawn = () => {
+      this.spawnPos = pos.clone();
+      this.spawnSet = true;
+      this.emit('log', 'info', `bed register: spawn set at (${this.spawnPos.x.toFixed(1)}, ${this.spawnPos.y.toFixed(1)}, ${this.spawnPos.z.toFixed(1)})`);
+      this.emit('spawnChanged', {
+        set: true,
+        x: this.spawnPos.x, y: this.spawnPos.y, z: this.spawnPos.z,
+        bed: { x: this.bedPos.x, y: this.bedPos.y, z: this.bedPos.z },
+      });
+    };
+
     let attempts = 0;
     const tryClick = () => {
       if (attempts >= BED_CLICK_RETRY) {
-        this.emit('log', 'error', 'bed register failed: respawn-set timeout');
+        this.emit('log', 'error', 'bed register failed: retry limit reached');
         return;
       }
       attempts++;
@@ -440,7 +471,13 @@ export class BotRunner extends EventEmitter {
         this.emit('log', 'warn', 'bed missing during register');
         return;
       }
-      this.bot.activateBlock(block);
+      try {
+        this.bot.activateBlock(block);
+        setSpawn();
+      } catch (err) {
+        this.emit('log', 'warn', `bed click failed (${err.message}); retrying (${attempts}/${BED_CLICK_RETRY})`);
+        setTimeout(tryClick, 400);
+      }
     };
 
     tryClick();

@@ -95,26 +95,63 @@ export class Db {
     ).run(target, ...legacyNames);
   }
 
+  getBotIdByName(name) {
+    const r = this.db.prepare('SELECT id FROM bots WHERE name=?').get(name);
+    return r ? r.id : null;
+  }
+
   loadAllowlist() {
     const global = this.db.prepare('SELECT player FROM allowlist_global').all().map(r => r.player);
-    const perBot = this.db.prepare('SELECT player FROM allowlist_bot').all().map(r => r.player);
+    const perBot = {};
+    this.db.prepare(
+      'SELECT b.name AS bot_name, ab.player FROM allowlist_bot ab JOIN bots b ON b.id = ab.bot_id'
+    ).all().forEach(r => {
+      (perBot[r.bot_name] = perBot[r.bot_name] || []).push(r.player);
+    });
     return { global, perBot };
   }
 
-  allowlistAdd(player, botId) {
-    if (botId) {
+  allowlistAdd(player, botName) {
+    if (botName) {
+      const botId = this.getBotIdByName(botName);
+      if (!botId) return;
       this.db.prepare('INSERT OR IGNORE INTO allowlist_bot (bot_id, player) VALUES (?, ?)').run(botId, player);
     } else {
       this.db.prepare('INSERT OR IGNORE INTO allowlist_global (player) VALUES (?)').run(player);
     }
   }
 
-  allowlistRemove(player, botId) {
-    if (botId) {
+  allowlistRemove(player, botName) {
+    if (botName) {
+      const botId = this.getBotIdByName(botName);
+      if (!botId) return;
       this.db.prepare('DELETE FROM allowlist_bot WHERE bot_id=? AND player=?').run(botId, player);
     } else {
       this.db.prepare('DELETE FROM allowlist_global WHERE player=?').run(player);
     }
+  }
+
+  saveSpawnpoint(botName, pos, bed) {
+    const botId = this.getBotIdByName(botName);
+    if (!botId) return;
+    this.db.prepare('UPDATE spawnpoints SET active=0 WHERE bot_id=?').run(botId);
+    this.db.prepare(
+      'INSERT INTO spawnpoints (bot_id, dimension, x, y, z, bed_x, bed_y, bed_z, active, set_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+    ).run(botId, 'overworld', pos.x, pos.y, pos.z,
+      bed ? bed.x : pos.x, bed ? bed.y : pos.y, bed ? bed.z : pos.z, Date.now());
+  }
+
+  deactivateSpawnpoint(botName) {
+    const botId = this.getBotIdByName(botName);
+    if (!botId) return;
+    this.db.prepare('UPDATE spawnpoints SET active=0 WHERE bot_id=?').run(botId);
+  }
+
+  loadSpawnpoints() {
+    return this.db.prepare(
+      'SELECT b.name AS bot_name, s.x, s.y, s.z, s.bed_x, s.bed_y, s.bed_z ' +
+      'FROM spawnpoints s JOIN bots b ON b.id = s.bot_id WHERE s.active=1'
+    ).all();
   }
 
   insertTpaLog({ botId, direction, reqType, player, action }) {
